@@ -1,0 +1,575 @@
+{
+  "scope": "Attachment audits and exploratory train-only CV; no human quality labels, no LightGBM fit.",
+  "design": {
+    "shape": [
+      512,
+      153
+    ],
+    "rank": 153,
+    "condition_number": 47566.59454823687,
+    "zero_interaction_columns": [],
+    "pair_support_min": [
+      [
+        80,
+        "philpapers",
+        "enron_emails"
+      ],
+      [
+        82,
+        "nih_exporter",
+        "enron_emails"
+      ],
+      [
+        92,
+        "enron_emails",
+        "hackernews"
+      ],
+      [
+        94,
+        "enron_emails",
+        "europarl"
+      ],
+      [
+        95,
+        "enron_emails",
+        "uspto_backgrounds"
+      ],
+      [
+        97,
+        "enron_emails",
+        "gutenberg_pg_19"
+      ],
+      [
+        98,
+        "enron_emails",
+        "pubmed_abstracts"
+      ],
+      [
+        104,
+        "dm_mathematics",
+        "enron_emails"
+      ],
+      [
+        106,
+        "freelaw",
+        "enron_emails"
+      ],
+      [
+        106,
+        "nih_exporter",
+        "philpapers"
+      ]
+    ],
+    "domain_support": {
+      "arxiv": {
+        "positive_rows": 325,
+        "max_share": 0.903096903096903
+      },
+      "freelaw": {
+        "positive_rows": 322,
+        "max_share": 0.993
+      },
+      "nih_exporter": {
+        "positive_rows": 215,
+        "max_share": 0.058
+      },
+      "pubmed_central": {
+        "positive_rows": 356,
+        "max_share": 0.999
+      },
+      "wikipedia_en": {
+        "positive_rows": 305,
+        "max_share": 0.7087087087087087
+      },
+      "dm_mathematics": {
+        "positive_rows": 270,
+        "max_share": 0.2352352352352352
+      },
+      "github": {
+        "positive_rows": 323,
+        "max_share": 0.991
+      },
+      "philpapers": {
+        "positive_rows": 206,
+        "max_share": 0.055055055055055056
+      },
+      "stackexchange": {
+        "positive_rows": 317,
+        "max_share": 0.998
+      },
+      "enron_emails": {
+        "positive_rows": 160,
+        "max_share": 0.026026026026026026
+      },
+      "gutenberg_pg_19": {
+        "positive_rows": 283,
+        "max_share": 0.4044044044044044
+      },
+      "pile_cc": {
+        "positive_rows": 355,
+        "max_share": 0.995
+      },
+      "ubuntu_irc": {
+        "positive_rows": 260,
+        "max_share": 0.176
+      },
+      "europarl": {
+        "positive_rows": 248,
+        "max_share": 0.11711711711711714
+      },
+      "hackernews": {
+        "positive_rows": 243,
+        "max_share": 0.12012012012012012
+      },
+      "pubmed_abstracts": {
+        "positive_rows": 284,
+        "max_share": 0.5754245754245755
+      },
+      "uspto_backgrounds": {
+        "positive_rows": 304,
+        "max_share": 0.6793587174348698
+      }
+    },
+    "nearest_l1_quantiles": [
+      0.022022022022021994,
+      0.17275495495495505,
+      0.42384158084158097,
+      0.5975939671550895,
+      0.8273013013013014
+    ]
+  },
+  "cross_tables": {
+    "train_TAG_1m": {
+      "rows": 512,
+      "unique_proportions": 512,
+      "matched_training_proportions": 512
+    },
+    "test_TAG_1m": {
+      "rows": 256,
+      "unique_proportions": 256,
+      "matched_training_proportions": 0
+    },
+    "test_TAG_60m": {
+      "rows": 256,
+      "unique_proportions": 256,
+      "matched_training_proportions": 0
+    },
+    "test_TAG_1B": {
+      "rows": 64,
+      "unique_proportions": 64,
+      "matched_training_proportions": 0
+    },
+    "est_TAG_10b": {
+      "rows": 63,
+      "unique_proportions": 63,
+      "matched_training_proportions": 63,
+      "per_domain_median_ratio": [
+        0.3426617787636836,
+        0.34266426338949746,
+        0.3426714005639052,
+        0.3426652990207131,
+        0.34266368648307033,
+        0.34267126689552996,
+        0.3426693362464251,
+        0.34266154008379135,
+        0.3426575879797027,
+        0.3426646565714921,
+        0.3426736333304932,
+        0.3426678646072508,
+        0.34266511346874534
+      ],
+      "max_abs_residual_after_domain_scaling": 0.7332254118696229,
+      "global_ratio_min_max": [
+        0.2515853216006414,
+        0.40783102200691346
+      ],
+      "per_recipe_scaling_max_abs_residual": 7.901885864658453e-05,
+      "per_recipe_scale_range": [
+        0.25159429269710865,
+        0.4078261909118634
+      ]
+    },
+    "est_TAG_70b": {
+      "rows": 63,
+      "unique_proportions": 63,
+      "matched_training_proportions": 63,
+      "per_domain_median_ratio": [
+        0.2706032861477987,
+        0.27059501936295505,
+        0.2706091598917781,
+        0.2706134656128275,
+        0.27062600943178233,
+        0.27061123057315944,
+        0.2706001985111226,
+        0.27060755798543523,
+        0.27060595619829975,
+        0.27060954535516346,
+        0.2706095482431757,
+        0.27060948993604067,
+        0.2706015110426503
+      ],
+      "max_abs_residual_after_domain_scaling": 0.6698708312012527,
+      "global_ratio_min_max": [
+        0.18739184052726693,
+        0.33296487757181686
+      ],
+      "per_recipe_scaling_max_abs_residual": 8.255276055524341e-05,
+      "per_recipe_scale_range": [
+        0.18740284265393858,
+        0.3329564574565416
+      ]
+    }
+  },
+  "benchmark_protocol": {
+    "seed": 20260923,
+    "folds": 5,
+    "group_l1_threshold": 0.01,
+    "groups": 512,
+    "selection_metric": "13-output mean squared error on train-only CV",
+    "target": "13-domain macro-mean original cross entropy; no target-scale calibration",
+    "quadratic_regularization": "RMS feature scaling within fold; interaction penalty factor 1,10,100 relative to linear block",
+    "kernel": "RBF ridge on original proportions, bandwidth based on training-fold pairwise distances",
+    "limitation": "Exploratory single grouped CV split; not nested final evaluation or proof of best model."
+  },
+  "exploratory_benchmark": {
+    "linear": {
+      "cv_rmse": 0.57400172368625,
+      "ratio_or_gamma": 1,
+      "lambda": 0.01,
+      "test": {
+        "test_TAG_1m": {
+          "all_output_rmse": 0.5230229815501849,
+          "macro_loss_spearman": 0.6243069066147859,
+          "mean_domain_spearman": 0.8307003450886489,
+          "macro_loss_regret": 0.7085578808417692,
+          "selected_test_row_position": 145
+        },
+        "test_TAG_60m": {
+          "all_output_rmse": 1.6204963876560181,
+          "macro_loss_spearman": 0.5582634756237124,
+          "mean_domain_spearman": 0.8292393304223815,
+          "macro_loss_regret": 0.6178860847766581,
+          "selected_test_row_position": 145
+        },
+        "test_TAG_1B": {
+          "all_output_rmse": 3.255593728312935,
+          "macro_loss_spearman": 0.3684523809523809,
+          "mean_domain_spearman": 0.7121794871794871,
+          "macro_loss_regret": 0.11560340569230743,
+          "selected_test_row_position": 17
+        }
+      }
+    },
+    "quadratic": {
+      "cv_rmse": 0.5505043517927425,
+      "ratio_or_gamma": 100,
+      "lambda": 0.01,
+      "test": {
+        "test_TAG_1m": {
+          "all_output_rmse": 0.5009642369145358,
+          "macro_loss_spearman": 0.6952806706340122,
+          "mean_domain_spearman": 0.8456069972885891,
+          "macro_loss_regret": 0.0672895541557903,
+          "selected_test_row_position": 191
+        },
+        "test_TAG_60m": {
+          "all_output_rmse": 1.5868862464202562,
+          "macro_loss_spearman": 0.6537801842526892,
+          "mean_domain_spearman": 0.8461491143898443,
+          "macro_loss_regret": 0.04950290459852935,
+          "selected_test_row_position": 191
+        },
+        "test_TAG_1B": {
+          "all_output_rmse": 3.1269160223333627,
+          "macro_loss_spearman": 0.4586996336996337,
+          "mean_domain_spearman": 0.7655783319244858,
+          "macro_loss_regret": 0.3329307674615385,
+          "selected_test_row_position": 36
+        }
+      }
+    },
+    "rbf": {
+      "cv_rmse": 0.511043349805299,
+      "ratio_or_gamma": 0.25,
+      "lambda": 0.0001,
+      "test": {
+        "test_TAG_1m": {
+          "all_output_rmse": 0.4787911759585514,
+          "macro_loss_spearman": 0.7947349221789881,
+          "mean_domain_spearman": 0.8665182029860732,
+          "macro_loss_regret": 0.07594617513509938,
+          "selected_test_row_position": 57
+        },
+        "test_TAG_60m": {
+          "all_output_rmse": 1.5826786041627783,
+          "macro_loss_spearman": 0.8017245078965438,
+          "mean_domain_spearman": 0.8719556600700741,
+          "macro_loss_regret": 0.03884963805858899,
+          "selected_test_row_position": 57
+        },
+        "test_TAG_1B": {
+          "all_output_rmse": 2.898931482935774,
+          "macro_loss_spearman": 0.499587912087912,
+          "mean_domain_spearman": 0.8334143420681882,
+          "macro_loss_regret": 0.06956565961538441,
+          "selected_test_row_position": 29
+        }
+      }
+    }
+  },
+  "quality_audit": {
+    "slimpajama_quality_signal_sample.jsonl.xz": {
+      "records": 51230,
+      "domains": {
+        "arxiv": 1419,
+        "book": 171,
+        "c4": 10000,
+        "commoncrawl": 9640,
+        "github": 10000,
+        "stackexchange": 10000,
+        "wikipedia": 10000
+      },
+      "unique_domain_ids": 51230,
+      "overlap_with_A1": 0,
+      "overlap_with_identical_22_fields": 0,
+      "missing": {},
+      "field_shapes": {
+        "dsir_books": {
+          "scalar": 51230
+        },
+        "fluency_en": {
+          "2": 51230
+        },
+        "rps_lines_ending_with_terminal_punctution_mark": {
+          "scalar": 51230
+        },
+        "modernbert_cleanliness": {
+          "6": 51230
+        },
+        "qurater": {
+          "4": 51230
+        },
+        "rps_doc_num_sentences": {
+          "scalar": 51230
+        },
+        "rps_doc_word_count": {
+          "scalar": 51230
+        },
+        "ad_en": {
+          "2": 51230
+        },
+        "rps_doc_frac_no_alph_words": {
+          "scalar": 51230
+        },
+        "modernbert_reasoning": {
+          "6": 51230
+        },
+        "rps_doc_frac_chars_top_2gram": {
+          "scalar": 51230
+        },
+        "rps_lines_uppercase_letter_fraction": {
+          "scalar": 51230
+        },
+        "rps_doc_frac_unique_words": {
+          "scalar": 51230
+        },
+        "rps_lines_numerical_chars_fraction": {
+          "scalar": 51230
+        },
+        "fineweb_edu": {
+          "1": 51230
+        },
+        "dsir_math": {
+          "scalar": 51230
+        },
+        "rps_doc_mean_word_length": {
+          "scalar": 51230
+        },
+        "dsir_wiki": {
+          "scalar": 51230
+        },
+        "rps_doc_frac_chars_top_3gram": {
+          "scalar": 51230
+        },
+        "rps_doc_unigram_entropy": {
+          "scalar": 51230
+        },
+        "modernbert_professionalism": {
+          "6": 51230
+        },
+        "modernbert_readability": {
+          "6": 51230
+        }
+      }
+    },
+    "arxiv_part-6777d8857c6e-000486.jsonl.xz": {
+      "records": 17523,
+      "domains": {
+        "arxiv": 17523
+      },
+      "unique_domain_ids": 17523,
+      "overlap_with_A1": 1419,
+      "overlap_with_identical_22_fields": 1419,
+      "missing": {},
+      "field_shapes": {
+        "dsir_books": {
+          "scalar": 17523
+        },
+        "fluency_en": {
+          "2": 17523
+        },
+        "rps_lines_ending_with_terminal_punctution_mark": {
+          "scalar": 17523
+        },
+        "modernbert_cleanliness": {
+          "6": 17523
+        },
+        "qurater": {
+          "4": 17523
+        },
+        "rps_doc_num_sentences": {
+          "scalar": 17523
+        },
+        "rps_doc_word_count": {
+          "scalar": 17523
+        },
+        "ad_en": {
+          "2": 17523
+        },
+        "rps_doc_frac_no_alph_words": {
+          "scalar": 17523
+        },
+        "modernbert_reasoning": {
+          "6": 17523
+        },
+        "rps_doc_frac_chars_top_2gram": {
+          "scalar": 17523
+        },
+        "rps_lines_uppercase_letter_fraction": {
+          "scalar": 17523
+        },
+        "rps_doc_frac_unique_words": {
+          "scalar": 17523
+        },
+        "rps_lines_numerical_chars_fraction": {
+          "scalar": 17523
+        },
+        "fineweb_edu": {
+          "1": 17523
+        },
+        "dsir_math": {
+          "scalar": 17523
+        },
+        "rps_doc_mean_word_length": {
+          "scalar": 17523
+        },
+        "dsir_wiki": {
+          "scalar": 17523
+        },
+        "rps_doc_frac_chars_top_3gram": {
+          "scalar": 17523
+        },
+        "rps_doc_unigram_entropy": {
+          "scalar": 17523
+        },
+        "modernbert_professionalism": {
+          "6": 17523
+        },
+        "modernbert_readability": {
+          "6": 17523
+        }
+      }
+    },
+    "github_part-6777d8857c6e-000275.jsonl.xz": {
+      "records": 203752,
+      "domains": {
+        "github": 203752
+      },
+      "unique_domain_ids": 203752,
+      "overlap_with_A1": 10000,
+      "overlap_with_identical_22_fields": 10000,
+      "missing": {},
+      "field_shapes": {
+        "modernbert_reasoning": {
+          "6": 203752
+        },
+        "dsir_books": {
+          "scalar": 203752
+        },
+        "modernbert_readability": {
+          "6": 203752
+        },
+        "fineweb_edu": {
+          "1": 203752
+        },
+        "rps_doc_unigram_entropy": {
+          "scalar": 203752
+        },
+        "modernbert_cleanliness": {
+          "6": 203752
+        },
+        "rps_doc_frac_chars_top_3gram": {
+          "scalar": 203752
+        },
+        "rps_doc_frac_chars_top_2gram": {
+          "scalar": 203752
+        },
+        "rps_doc_frac_no_alph_words": {
+          "scalar": 203752
+        },
+        "modernbert_professionalism": {
+          "6": 203752
+        },
+        "rps_lines_ending_with_terminal_punctution_mark": {
+          "scalar": 203752
+        },
+        "dsir_math": {
+          "scalar": 203752
+        },
+        "rps_doc_frac_unique_words": {
+          "scalar": 203752
+        },
+        "rps_doc_num_sentences": {
+          "scalar": 203752
+        },
+        "rps_lines_numerical_chars_fraction": {
+          "scalar": 203752
+        },
+        "ad_en": {
+          "2": 203752
+        },
+        "dsir_wiki": {
+          "scalar": 203752
+        },
+        "rps_doc_word_count": {
+          "scalar": 203752
+        },
+        "rps_doc_mean_word_length": {
+          "scalar": 203752
+        },
+        "rps_lines_uppercase_letter_fraction": {
+          "scalar": 203752
+        },
+        "qurater": {
+          "4": 203752
+        },
+        "fluency_en": {
+          "2": 203752
+        }
+      }
+    }
+  },
+  "A1_domain_balanced_reference_effective_n": 6944.041647551264,
+  "derived_checks": {
+    "uniform_independent_22_score_high_low_conflict_probability": 0.9964326249872784,
+    "one_zero_21_ones_equal_weight_min_quality": 0.9090909090909091,
+    "unique_domain_ids_across_quality_files": 261086,
+    "arxiv_new_records": 16104,
+    "github_new_records": 193752
+  },
+  "notes": [
+    "Q is not fitted because interval utilities, human labels and pair selection are not specified in the proposal.",
+    "Full score-field fingerprints verify duplicate observations, not cryptographic identity of absent text.",
+    "No external source data or test labels used to fit quality utilities."
+  ]
+}

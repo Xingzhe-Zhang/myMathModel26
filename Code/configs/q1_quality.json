@@ -1,0 +1,61 @@
+{
+  "version": "q1-quality-v1",
+  "seed": 20260923,
+  "reference": {
+    "source": "A1",
+    "evaluation_fraction": 0.2,
+    "domain_balanced": true,
+    "quantiles": [0.01, 0.99]
+  },
+  "qurater_weights": [0.25, 0.25, 0.25, 0.25],
+  "weights": {"critic_shrinkage": 0.0},
+  "primary_score": "Q_base",
+  "conflict": {
+    "high": 0.75,
+    "low": 0.25,
+    "mad_floor": 0.005,
+    "eta": 0.25,
+    "pairs": [
+      ["fineweb_edu", "ad_en"],
+      ["fineweb_edu", "modernbert_cleanliness"],
+      ["modernbert_reasoning", "modernbert_cleanliness"],
+      ["qurater", "ad_en"]
+    ],
+    "pair_status": "semantic_prior_not_human_validated; candidate only until independent review",
+    "length_bins": 5,
+    "permutation_repeats": 199,
+    "permutation_max_per_domain": 350
+  },
+  "factor_analysis": {"max_per_domain": 250, "parallel_repeats": 100, "max_factors": 8, "promax_power": 4},
+  "bootstrap_repeats": 200,
+  "review": {"per_stratum": 6, "reviewers": ["reviewer_1", "reviewer_2"]},
+  "utilities": {
+    "fineweb_edu": {"kind": "fixed_positive", "bounds": [0.0, 5.0], "basis": "published_rating_scale"},
+    "fluency_en": {"kind": "identity", "basis": "softmax_positive_class_not_calibrated"},
+    "modernbert_cleanliness": {"kind": "identity", "basis": "softmax_expected_level_divided_by_5"},
+    "modernbert_readability": {"kind": "identity", "basis": "softmax_expected_level_divided_by_5"},
+    "modernbert_reasoning": {"kind": "identity", "basis": "softmax_expected_level_divided_by_5"},
+    "modernbert_professionalism": {"kind": "identity", "basis": "target_dependent_preference"},
+    "qurater": {"kind": "subscale_positive", "basis": "four_distinct_dimensions_reference_quantiles"},
+    "ad_en": {"kind": "identity", "basis": "softmax_no_ad_class_not_calibrated"},
+    "dsir_books": {"kind": "reference_positive", "basis": "target_relevance_proxy_not_intrinsic_quality"},
+    "dsir_wiki": {"kind": "reference_positive", "basis": "target_relevance_proxy_not_intrinsic_quality"},
+    "dsir_math": {"kind": "reference_positive", "basis": "target_relevance_proxy_not_intrinsic_quality"},
+    "rps_doc_word_count": {"kind": "reference_interval", "log1p": true, "interval_quantiles": [0.05, 0.95], "basis": "provisional_empirical_typicality_not_quality_ground_truth"},
+    "rps_doc_num_sentences": {"kind": "reference_interval", "log1p": true, "interval_quantiles": [0.05, 0.95], "basis": "provisional_empirical_typicality_not_quality_ground_truth"},
+    "rps_doc_unigram_entropy": {"kind": "reference_interval", "interval_quantiles": [0.01, 0.99], "basis": "provisional_empirical_typicality_not_quality_ground_truth"},
+    "rps_doc_frac_unique_words": {"kind": "reference_positive", "basis": "diversity_proxy_length_confounding_checked"},
+    "rps_doc_frac_no_alph_words": {"kind": "upper_tolerance", "tolerance": 0.2, "domain_tolerance": {"arxiv": 0.45, "github": 0.8}, "basis": "provisional_domain_allowance_requires_review"},
+    "rps_doc_frac_chars_top_2gram": {"kind": "reference_negative", "basis": "repetition_proxy"},
+    "rps_doc_frac_chars_top_3gram": {"kind": "reference_negative", "basis": "repetition_proxy"},
+    "rps_lines_uppercase_letter_fraction": {"kind": "upper_tolerance", "tolerance": 0.15, "domain_tolerance": {"arxiv": 0.3, "github": 0.3}, "basis": "provisional_domain_allowance_requires_review"},
+    "rps_lines_ending_with_terminal_punctution_mark": {"kind": "fixed_positive", "bounds": [0.0, 0.3], "neutral_domains": ["github"], "basis": "provisional_structure_proxy_not_applicable_to_code"},
+    "rps_lines_numerical_chars_fraction": {"kind": "upper_tolerance", "tolerance": 0.2, "domain_tolerance": {"arxiv": 0.5, "github": 0.5}, "basis": "provisional_domain_allowance_requires_review"},
+    "rps_doc_mean_word_length": {"kind": "reference_interval", "interval_quantiles": [0.01, 0.99], "basis": "provisional_empirical_typicality_not_quality_ground_truth"}
+  },
+  "sources": [
+    "https://huggingface.co/datasets/opendatalab/SlimPajama-Meta-rater/blob/main/README.md",
+    "https://aclanthology.org/2025.acl-long.533/",
+    "https://ikojadin.perso.univ-pau.fr/kappalab/pub/GraRouCOLL2000.pdf"
+  ]
+}
