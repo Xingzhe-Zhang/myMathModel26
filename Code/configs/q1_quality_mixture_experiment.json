@@ -1,5 +1,5 @@
 {
-  "version": "q1-quality-mixture-ablation-v1",
+  "version": "q1-reconstructed-signal-transfer-v3",
   "seed": 20260924,
   "train": {
     "mixture": "train_mixture_1m.csv",
@@ -17,9 +17,15 @@
   "grid": {
     "gamma": [0.25, 1.0],
     "lambda": [0.0001, 0.01],
-    "alpha": [0.5, 1.5],
-    "beta": [0.5, 1.5]
+    "alpha": [0.0, 0.5, 1.5]
   },
-  "a18_token_cap": 2048,
-  "effect_delta": 0.005
+  "signal_sample_per_domain": 64,
+  "public_models": {
+    "batch_size": 4,
+    "max_length": 512,
+    "max_text_chars": 8192,
+    "device": "cpu"
+  },
+  "similarity_temperatures": [0.5, 1.0, 2.0],
+  "quality_gate_required": true
 }

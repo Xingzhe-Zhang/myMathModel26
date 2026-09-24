@@ -1,298 +1,264 @@
-"""Controlled predictive ablation of fixed domain-quality priors in RegMix.
+"""Three-model comparison, conditional on validated reconstructed Q.
 
-Q and text proxies are domain constants. Their interactions with p change the
-RBF distance metric, but contain no information independent of p. Results are
-predictive inductive-bias checks, never causal quality coefficients.
+Both Q vectors are fixed domain profiles derived without A4-A15 labels. Their
+interaction with p changes RBF geometry; no independent causal quality effect
+is identified because p alone determines every p_i Q_i term.
 """
 from __future__ import annotations
 
-from collections import Counter, defaultdict
 from itertools import product
 import json
-import lzma
-import math
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from .mixture import _rank_corr, _rbf_fit, _rbf_predict, grouped_folds, load_pair
-
-TEXT_FEATURES = ("log_token_length", "repetition_ratio", "vocabulary_richness",
-                 "normalized_entropy", "special_character_ratio")
-
-
-def text_features(value: str, cap: int = 2048) -> np.ndarray:
-    """Deterministic, whitespace-token proxies; cap n-gram work per document."""
-    words = value.casefold().split()
-    token_count = len(words)
-    words = words[:cap]
-    n = len(words)
-    triples = max(0, n - 2)
-    repetition = 1 - len(set(zip(words, words[1:], words[2:]))) / triples if triples else 0.0
-    counts = np.fromiter(Counter(words).values(), float) if n else np.empty(0)
-    probabilities = counts / n if n else counts
-    entropy = -float(np.sum(probabilities * np.log(probabilities))) / math.log(len(counts)) if len(counts) > 1 else 0.0
-    special = sum(not ch.isalnum() and not ch.isspace() for ch in value) / len(value) if value else 0.0
-    return np.array([math.log1p(token_count), repetition, len(counts) / n if n else 0.0,
-                     entropy, special], float)
+from .quality_reconstruction import reconstruct
+from .quality_transfer import score_transfer, similarity_transfer
 
 
-def load_text_domain_features(path: Path, domains: list[str], cap: int = 2048) -> pd.DataFrame:
-    expected = set(domains)
-    accum = defaultdict(lambda: np.zeros(len(TEXT_FEATURES), float))
-    accum2 = defaultdict(lambda: np.zeros(len(TEXT_FEATURES), float))
-    counts = defaultdict(int)
-    invalid_paths = defaultdict(bool)
-    with lzma.open(path, "rt", encoding="utf-8") as stream:
-        for line_number, line in enumerate(stream, 1):
-            record = json.loads(line)
-            domain = record.get("_source_domain")
-            value = record.get("text")
-            source_path = record.get("_source_path")
-            if domain not in expected or not isinstance(value, str) or not isinstance(source_path, str):
-                raise ValueError(f"A18 invalid record on line {line_number}")
-            invalid_paths[domain] = invalid_paths[domain] or not source_path.startswith("valid/")
-            vector = text_features(value, cap)
-            accum[domain] += vector
-            accum2[domain] += vector * vector
-            counts[domain] += 1
-    rows = []
-    for domain in domains:
-        n = counts[domain]
-        if not n:
-            raise ValueError(f"A18 missing domain {domain}")
-        mean = accum[domain] / n
-        sd = np.sqrt(np.maximum(0, accum2[domain] / n - mean * mean))
-        row = {"domain": domain, "a18_rows": n, "all_valid_shards": not invalid_paths[domain],
-               "sampling_note": "A18 validation shards; not training-corpus measurements"}
-        row.update({name: float(mean[j]) for j, name in enumerate(TEXT_FEATURES)})
-        row.update({name + "_sd": float(sd[j]) for j, name in enumerate(TEXT_FEATURES)})
-        rows.append(row)
-    return pd.DataFrame(rows)
+def centered_quality(q: np.ndarray) -> np.ndarray:
+    q = np.asarray(q, float)
+    if not np.isfinite(q).all():
+        raise ValueError("Quality vector contains non-finite values")
+    scale = q.std()
+    return (q - q.mean()) / scale if scale > 1e-10 else np.zeros_like(q)
 
 
-def load_domain_quality(summary_path: Path, mapping_path: Path, domains: list[str]) -> pd.DataFrame:
-    summary = pd.read_csv(summary_path)
-    mapping = pd.read_csv(mapping_path)
-    if set(mapping.mixture_domain) != set(domains) or len(mapping) != len(domains):
-        raise ValueError("A16 must uniquely cover all mixture domains")
-    if mapping.mixture_domain.duplicated().any():
-        raise ValueError("A16 has duplicate domains")
-    # A2/A3 provide larger domain-specific extensions; A1 supplies the other four.
-    source = {"arxiv": "A2", "github": "A3"}
-    a1_domains = set(summary.loc[summary.dataset.eq("A1"), "domain"])
-    if len(a1_domains) != 7:
-        raise ValueError("Expected seven A1 quality domains")
-    lookup = summary.set_index(["dataset", "domain"])["Q_primary_mean"]
-    observed = {}
-    for qdomain in a1_domains:
-        dataset = source.get(qdomain, "A1")
-        observed[qdomain] = float(lookup.loc[(dataset, qdomain)])
-    rows = []
-    for domain in domains:
-        entry = mapping.set_index("mixture_domain").loc[domain]
-        qdomain = entry.quality_domain
-        mapped = qdomain in observed and entry.mapping_type in {"direct", "near_direct"}
-        rows.append({"domain": domain, "quality_domain": qdomain,
-                     "mapping_type": entry.mapping_type, "q_observed": mapped,
-                     "q_source": source.get(qdomain, "A1") if mapped else "neutral_imputation",
-                     "q_official_22": observed[qdomain] if mapped else np.nan})
-    frame = pd.DataFrame(rows)
-    if int(frame.q_observed.sum()) != 6:
-        raise ValueError("Expected six mapped quality domains; inspect A16")
-    mean = float(frame.q_official_22.mean())
-    sd = float(frame.q_official_22.std(ddof=0))
-    if sd <= 0:
-        raise ValueError("Mapped Q has no variation")
-    frame["q_model_input"] = frame.q_official_22.fillna(mean)
-    frame["q_centered_scaled"] = (frame.q_model_input - mean) / sd
-    frame["q_imputed"] = ~frame.q_observed
-    return frame
-
-
-def standardized_text_matrix(frame: pd.DataFrame) -> np.ndarray:
-    raw = frame.loc[:, TEXT_FEATURES].to_numpy(float)
-    center = raw.mean(axis=0)
-    scale = raw.std(axis=0)
-    scale[scale < 1e-12] = 1.0
-    return (raw - center) / scale
-
-
-def geometry(p: np.ndarray, model: int, q: np.ndarray, text: np.ndarray,
-             alpha: float = 1.0, beta: float = 1.0) -> np.ndarray:
-    blocks = [p]
-    if model >= 2:
-        blocks += [alpha * p * q, alpha * (p @ q)[:, None]]
-    if model >= 3:
-        blocks += [beta * (p[:, :, None] * text[None, :, :]).reshape(len(p), -1) / math.sqrt(text.shape[1]),
-                   beta * (p @ text) / math.sqrt(text.shape[1])]
-    return np.column_stack(blocks)
+def geometry(p: np.ndarray, model: int, q: np.ndarray, alpha: float = 1.0) -> np.ndarray:
+    """Use the same quality geometry for both transfer approaches."""
+    p = np.asarray(p, float)
+    if model == 1:
+        return p.copy()
+    if model not in (2, 3):
+        raise ValueError("Only Model-1/2/3 are defined")
+    q = np.asarray(q, float)
+    if q.shape != (p.shape[1],):
+        raise ValueError("Q vector must match the 17 training domains")
+    return np.column_stack([p, alpha * p * q, alpha * (p @ q)[:, None]])
 
 
 def candidates(model: int, config: dict):
     grid = config["grid"]
-    for gamma, lam, alpha, beta in product(grid["gamma"], grid["lambda"],
-                                            grid["alpha"] if model >= 2 else [0.0],
-                                            grid["beta"] if model >= 3 else [0.0]):
-        yield {"gamma": gamma, "lambda": lam, "alpha": alpha, "beta": beta}
+    for gamma, lam, alpha in product(grid["gamma"], grid["lambda"],
+                                      [0.0] if model == 1 else grid["alpha"]):
+        yield {"gamma": gamma, "lambda": lam, "alpha": alpha}
 
 
-def cv_select(p, y, q, text, config):
+def cv_select(p, y, quality_vectors, config):
     folds, groups = grouped_folds(p, config["train"]["group_l1_threshold"],
                                    config["train"]["folds"], config["seed"])
     rows = []
     for model in (1, 2, 3):
+        q = quality_vectors.get(model, np.zeros(p.shape[1]))
         for params in candidates(model, config):
-            z = geometry(p, model, q, text, params["alpha"], params["beta"])
-            errors = []
-            for fold in range(config["train"]["folds"]):
+            z = geometry(p, model, q, params["alpha"])
+            fold_errors = []
+            for fold in np.unique(folds):
                 tr, va = folds != fold, folds == fold
                 fit = _rbf_fit(z[tr], y[tr], params["gamma"], params["lambda"])
-                predicted = _rbf_predict(fit, z[va])
-                errors.append(float(np.mean((y[va] - predicted) ** 2)))
+                fold_errors.append(float(np.mean((y[va] - _rbf_predict(fit, z[va])) ** 2)))
             rows.append({"model": f"Model-{model}", **params,
-                         "cv_mse": float(np.mean(errors)), "cv_rmse": float(np.sqrt(np.mean(errors))),
-                         "fold_mse": json.dumps(errors)})
+                         "cv_mse": float(np.mean(fold_errors)),
+                         "cv_rmse": float(np.sqrt(np.mean(fold_errors))),
+                         "fold_mse": json.dumps(fold_errors)})
     table = pd.DataFrame(rows)
     best = table.loc[table.groupby("model").cv_mse.idxmin()].sort_values("model").reset_index(drop=True)
     return table, best, folds, groups
 
 
 def score(actual: np.ndarray, predicted: np.ndarray) -> dict:
+    actual, predicted = np.asarray(actual, float), np.asarray(predicted, float)
+    if actual.shape != predicted.shape or actual.ndim != 2:
+        raise ValueError("Loss arrays must have matching (recipe, output) shapes")
     err = actual - predicted
     ma, mp = actual.mean(axis=1), predicted.mean(axis=1)
-    denom = np.sum((actual - actual.mean(axis=0)) ** 2)
-    macro_denom = np.sum((ma - ma.mean()) ** 2)
-    top = min(10, len(ma))
-    return {"n": len(ma), "rmse": float(np.sqrt(np.mean(err * err))),
-            "mae": float(np.mean(np.abs(err))),
-            "r2": float(1 - np.sum(err * err) / denom) if denom else np.nan,
-            "macro_rmse": float(np.sqrt(np.mean((ma - mp) ** 2))),
-            "macro_mae": float(np.mean(np.abs(ma - mp))),
-            "macro_r2": float(1 - np.sum((ma - mp) ** 2) / macro_denom) if macro_denom else np.nan,
-            "macro_spearman": _rank_corr(ma, mp),
-            "mean_output_spearman": float(np.nanmean([_rank_corr(actual[:, j], predicted[:, j])
-                                                       for j in range(actual.shape[1])])),
-            "top10_overlap": len(set(np.argsort(ma)[:top]) & set(np.argsort(mp)[:top])) / top,
-            "selected_regret": float(ma[np.argmin(mp)] - np.min(ma))}
+    denominator = np.sum((actual - actual.mean(axis=0)) ** 2)
+    macro_denominator = np.sum((ma - ma.mean()) ** 2)
+    oracle = float(ma.min())
+    result = {"n": len(ma), "rmse": float(np.sqrt(np.mean(err * err))),
+              "mae": float(np.mean(np.abs(err))),
+              "r2": float(1 - np.sum(err * err) / denominator) if denominator else np.nan,
+              "macro_rmse": float(np.sqrt(np.mean((ma - mp) ** 2))),
+              "macro_mae": float(np.mean(np.abs(ma - mp))),
+              "macro_r2": float(1 - np.sum((ma - mp) ** 2) / macro_denominator) if macro_denominator else np.nan,
+              "macro_spearman": _rank_corr(ma, mp),
+              "mean_output_spearman": float(np.nanmean([_rank_corr(actual[:, j], predicted[:, j])
+                                                         for j in range(actual.shape[1])]))}
+    for k in (1, 5, 10):
+        k_actual = min(k, len(ma))
+        selected = np.argsort(mp)[:k_actual]
+        true_top = np.argsort(ma)[:k_actual]
+        result[f"top{k}_overlap"] = len(set(selected) & set(true_top)) / k_actual
+        result[f"regret_at_{k}"] = float(ma[selected].min() - oracle)
+    return result
 
 
-def effect_table(models: dict, train, q: np.ndarray, text: np.ndarray,
-                 quality_frame: pd.DataFrame, delta: float = 0.005) -> pd.DataFrame:
-    """Supported local replacement sensitivity, averaged across training recipes."""
-    rows = []
-    bounds = train.p.max(axis=0)
-    base_preds = {name: predict_bundle(bundle, train.p, q, text).mean(axis=1)
-                  for name, bundle in models.items()}
-    for target, domain in enumerate(train.domains):
-        changes, origin = [], []
-        for k, p in enumerate(train.p):
-            donors = np.argsort(-p)
-            donor = next((int(d) for d in donors if d != target and p[d] >= delta), None)
-            if donor is None or p[target] + delta > bounds[target] + 1e-12:
-                continue
-            changed = p.copy()
-            changed[donor] -= delta
-            changed[target] += delta
-            changes.append(changed)
-            origin.append(k)
-        row = {"domain": domain, "delta_share": delta,
-               "supported_recipes": len(changes),
-               "official_q_observed": bool(quality_frame.loc[target, "q_observed"])}
-        for name, bundle in models.items():
-            if changes:
-                pred = predict_bundle(bundle, np.stack(changes), q, text).mean(axis=1)
-                row[name + "_delta_macro_loss"] = float(np.mean(pred - base_preds[name][origin]))
-            else:
-                row[name + "_delta_macro_loss"] = np.nan
-        rows.append(row)
-    return pd.DataFrame(rows)
-
-
-def predict_bundle(bundle, p, q, text):
-    params = bundle["params"]
-    z = geometry(p, bundle["model"], q, text, params["alpha"], params["beta"])
+def predict_bundle(bundle: dict, p: np.ndarray, q: np.ndarray) -> np.ndarray:
+    z = geometry(p, bundle["model"], q, bundle["params"]["alpha"])
     return _rbf_predict(bundle["fit"], z)
 
 
-def run(config_path: Path, data_root: Path, summary_path: Path, out_dir: Path) -> dict:
+def _paired_intervals(row_mse: dict, name: str, seed: int) -> list[dict]:
+    n = len(row_mse["Model-1"])
+    rng = np.random.default_rng(seed)
+    draws = rng.integers(0, n, size=(2000, n))
+    rows = []
+    for candidate in ("Model-2", "Model-3"):
+        reference = np.sqrt(row_mse["Model-1"][draws].mean(axis=1))
+        comparison = reference - np.sqrt(row_mse[candidate][draws].mean(axis=1))
+        rows.append({"dataset": name, "comparison": candidate + " vs Model-1",
+                     "rmse_improvement": float(np.sqrt(row_mse["Model-1"].mean()) -
+                                               np.sqrt(row_mse[candidate].mean())),
+                     "bootstrap_ci_low": float(np.quantile(comparison, 0.025)),
+                     "bootstrap_ci_high": float(np.quantile(comparison, 0.975)),
+                     "bootstrap_repeats": 2000})
+    return rows
+
+
+def _save(frame: pd.DataFrame, path: Path):
+    frame.to_csv(path, index=False, encoding="utf-8-sig")
+
+
+def run(config_path: Path, data_root: Path, summary_path: Path, out_dir: Path,
+        sample_per_domain: int | None = None, allow_loss: bool = False) -> dict:
     config = json.loads(config_path.read_text(encoding="utf-8"))
     out_dir.mkdir(parents=True, exist_ok=True)
     root = data_root / "A_data_value"
     tables = root / "regmix_tables"
-    trspec = config["train"]
-    train = load_pair(tables, trspec["mixture"], trspec["loss"], "train_1m")
-    external = {name: load_pair(tables, spec["mixture"], spec["loss"], name)
-                for name, spec in config["external_sets"].items()}
+    spec = config["train"]
+    train = load_pair(tables, spec["mixture"], spec["loss"], "train_1m")
+    external = {name: load_pair(tables, row["mixture"], row["loss"], name)
+                for name, row in config["external_sets"].items()}
     for pair in external.values():
         if pair.domains != train.domains or pair.loss_domains != train.loss_domains:
-            raise ValueError(f"{pair.name}: domain/order mismatch")
-    quality = load_domain_quality(summary_path, root / "domain_mapping_guide.csv", train.domains)
-    quality.to_csv(out_dir / "quality_domain_mapping.csv", index=False, encoding="utf-8-sig")
-    q = quality.q_centered_scaled.to_numpy(float)
-    text_frame = load_text_domain_features(root / "regmix_domain_sample.jsonl.xz", train.domains,
-                                            config["a18_token_cap"])
-    text_frame.to_csv(out_dir / "a18_domain_features.csv", index=False, encoding="utf-8-sig")
-    text_matrix = standardized_text_matrix(text_frame)
-    cv, best, folds, groups = cv_select(train.p, train.y, q, text_matrix, config)
-    cv.to_csv(out_dir / "cv_grid.csv", index=False, encoding="utf-8-sig")
-    best.to_csv(out_dir / "cv_summary.csv", index=False, encoding="utf-8-sig")
+            raise ValueError(f"{pair.name}: domain/output order mismatch")
+    sample_per_domain = sample_per_domain or config["signal_sample_per_domain"]
+    try:
+        features = reconstruct(root / "slimpajama_quality_signal_sample.jsonl.xz",
+                               root / "regmix_domain_sample.jsonl.xz",
+                               summary_path.parent / "sample_scores.csv", out_dir,
+                               a1_domains=sorted(pd.read_csv(summary_path).query("dataset == 'A1'").domain.unique()),
+                               regmix_domains=train.domains,
+                               per_domain=sample_per_domain,
+                               batch_size=config["public_models"]["batch_size"],
+                               max_length=config["public_models"]["max_length"],
+                               model_text_chars=config["public_models"]["max_text_chars"],
+                               device=config["public_models"].get("device"))
+    except (RuntimeError, OSError, ValueError) as exc:
+        gate = {"passed": False, "stage": "public_signal_inference", "reason": str(exc),
+                "loss_evaluation_run": False}
+        (out_dir / "quality_gate.json").write_text(json.dumps(gate, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"status": gate}
+    sim, sim_sensitivity, a1_profile, a18_profile, sim_validation = similarity_transfer(
+        features["a1_x"], features["a1_domain"], features["a18_x"], features["a18_domain"],
+        features["accepted_fields"], summary_path, root / "domain_mapping_guide.csv", train.domains,
+        temperatures=tuple(config["similarity_temperatures"]))
+    direct, lodo, direct_validation = score_transfer(
+        features["a1_official_raw"], features["a1_rebuilt_raw"],
+        features["a1_full_rebuilt_raw"], features["a1_domain"], features["a1_q"],
+        features["a18_rebuilt_raw"], features["a18_domain"], train.domains,
+        config_path.parent / "q1_quality.json", summary_path.parent / "fitted_scoring_model.json")
+    _save(a1_profile, out_dir / "a1_feature_profiles.csv")
+    _save(a18_profile, out_dir / "a18_feature_profiles.csv")
+    _save(sim, out_dir / "similarity_mapping.csv")
+    _save(sim_sensitivity, out_dir / "similarity_sensitivity.csv")
+    _save(lodo, out_dir / "task12_q_lodo.csv")
+    q_domain = sim.merge(direct, on=["domain", "a18_rows"], validate="one_to_one")
+    q_domain["q_model2_standardized"] = centered_quality(q_domain.q_similarity.to_numpy(float))
+    q_domain["q_model3_standardized"] = centered_quality(q_domain.q_direct.to_numpy(float))
+    _save(q_domain, out_dir / "quality_domain_estimates.csv")
+    gate = {"passed": bool(sim_validation["passes_gate"] and direct_validation["passes_gate"]),
+            "stage": "Q_cross_domain_validation", "model2_mapping": sim_validation,
+            "model3_task12_scoring": direct_validation,
+            "accepted_shared_fields": features["accepted_fields"],
+            "loss_requires_explicit_flag": True,
+            "loss_evaluation_run": bool(sim_validation["passes_gate"] and direct_validation["passes_gate"] and allow_loss)}
+    (out_dir / "quality_gate.json").write_text(json.dumps(gate, ensure_ascii=False, indent=2), encoding="utf-8")
+    if not gate["passed"] or not allow_loss:
+        return {"status": gate, "mapping": sim, "lodo": lodo}
+    quality_vectors = {1: np.zeros(17),
+                       2: q_domain.q_model2_standardized.to_numpy(float),
+                       3: q_domain.q_model3_standardized.to_numpy(float)}
+    cv, best, folds, groups = cv_select(train.p, train.y, quality_vectors, config)
+    _save(cv, out_dir / "cv_grid.csv")
+    _save(best, out_dir / "cv_summary.csv")
     models = {}
     for _, row in best.iterrows():
-        name = row["model"]
-        model = int(name[-1])
-        params = {key: float(row[key]) for key in ("gamma", "lambda", "alpha", "beta")}
-        z = geometry(train.p, model, q, text_matrix, params["alpha"], params["beta"])
-        models[name] = {"model": model, "params": params,
-                        "fit": _rbf_fit(z, train.y, params["gamma"], params["lambda"])}
-    metrics, per_output, predictions, rank_comparisons = [], [], [], []
+        model = int(row.model[-1])
+        params = {key: float(row[key]) for key in ("gamma", "lambda", "alpha")}
+        z = geometry(train.p, model, quality_vectors[model], params["alpha"])
+        models[row.model] = {"model": model, "params": params,
+                             "fit": _rbf_fit(z, train.y, params["gamma"], params["lambda"])}
+    metric_rows, output_rows, prediction_rows, rank_rows, interval_rows = [], [], [], [], []
     for name, pair in external.items():
-        macro_predictions = {}
+        macro_predictions, row_mse = {}, {}
         for model_name, bundle in models.items():
-            predicted = predict_bundle(bundle, pair.p, q, text_matrix)
-            metrics.append({"dataset": name, "kind": config["external_sets"][name]["kind"],
-                            "model": model_name, **score(pair.y, predicted)})
+            predicted = predict_bundle(bundle, pair.p, quality_vectors[bundle["model"]])
+            metric_rows.append({"dataset": name, "kind": config["external_sets"][name]["kind"],
+                                "model": model_name, **score(pair.y, predicted)})
             macro_predictions[model_name] = predicted.mean(axis=1)
+            row_mse[model_name] = np.mean((pair.y - predicted) ** 2, axis=1)
             for j, output in enumerate(pair.loss_domains):
                 err = pair.y[:, j] - predicted[:, j]
                 denom = np.sum((pair.y[:, j] - pair.y[:, j].mean()) ** 2)
-                per_output.append({"dataset": name, "model": model_name, "output": output,
-                                   "rmse": float(np.sqrt(np.mean(err * err))),
-                                   "mae": float(np.mean(np.abs(err))),
-                                   "r2": float(1 - np.sum(err * err) / denom) if denom else np.nan,
-                                   "spearman": _rank_corr(pair.y[:, j], predicted[:, j])})
-            for k, index in enumerate(pair.indexes):
-                predictions.append({"dataset": name, "model": model_name, "index": index,
+                output_rows.append({"dataset": name, "model": model_name, "output": output,
+                                    "rmse": float(np.sqrt(np.mean(err * err))),
+                                    "mae": float(np.mean(np.abs(err))),
+                                    "r2": float(1 - np.sum(err * err) / denom) if denom else np.nan,
+                                    "spearman": _rank_corr(pair.y[:, j], predicted[:, j])})
+            prediction_rows.extend({"dataset": name, "model": model_name, "index": index,
                                     "actual_macro_loss": float(pair.y[k].mean()),
-                                    "predicted_macro_loss": float(predicted[k].mean())})
+                                    "predicted_macro_loss": float(predicted[k].mean())}
+                                   for k, index in enumerate(pair.indexes))
         baseline = macro_predictions["Model-1"]
-        top = min(10, len(pair.p))
         for model_name in ("Model-2", "Model-3"):
             other = macro_predictions[model_name]
-            rank_comparisons.append({"dataset": name, "comparison": "Model-1 vs " + model_name,
-                                     "prediction_rank_spearman": _rank_corr(baseline, other),
-                                     "prediction_top10_overlap": len(set(np.argsort(baseline)[:top]) &
-                                                                     set(np.argsort(other)[:top])) / top})
-    pd.DataFrame(metrics).to_csv(out_dir / "external_metrics.csv", index=False, encoding="utf-8-sig")
-    pd.DataFrame(per_output).to_csv(out_dir / "external_output_metrics.csv", index=False, encoding="utf-8-sig")
-    pd.DataFrame(predictions).to_csv(out_dir / "macro_predictions.csv", index=False, encoding="utf-8-sig")
-    pd.DataFrame(rank_comparisons).to_csv(out_dir / "ranking_stability.csv", index=False, encoding="utf-8-sig")
-    effects = effect_table(models, train, q, text_matrix, quality, config["effect_delta"])
-    effects.to_csv(out_dir / "domain_effects.csv", index=False, encoding="utf-8-sig")
+            row = {"dataset": name, "comparison": "Model-1 vs " + model_name,
+                   "prediction_rank_spearman": _rank_corr(baseline, other)}
+            for k in (1, 5, 10):
+                actual_k = min(k, len(pair.p))
+                row[f"prediction_top{k}_overlap"] = len(set(np.argsort(baseline)[:actual_k]) &
+                                                        set(np.argsort(other)[:actual_k])) / actual_k
+            rank_rows.append(row)
+        if config["external_sets"][name]["kind"] != "extrapolated_subset":
+            interval_rows.extend(_paired_intervals(row_mse, name, config["seed"] + len(interval_rows)))
+    metrics = pd.DataFrame(metric_rows)
+    intervals = pd.DataFrame(interval_rows)
+    _save(metrics, out_dir / "external_metrics.csv")
+    _save(pd.DataFrame(output_rows), out_dir / "external_output_metrics.csv")
+    _save(pd.DataFrame(prediction_rows), out_dir / "macro_predictions.csv")
+    _save(pd.DataFrame(rank_rows), out_dir / "ranking_stability.csv")
+    _save(intervals, out_dir / "paired_rmse_intervals.csv")
+    decisions = []
+    for model_name, gate in (("Model-2", sim_validation["passes_gate"]),
+                             ("Model-3", direct_validation["passes_gate"])):
+        same_scale = metrics[(metrics.dataset == "test_1m") & (metrics.model == model_name)].iloc[0]
+        baseline = metrics[(metrics.dataset == "test_1m") & (metrics.model == "Model-1")].iloc[0]
+        ci = intervals[(intervals.dataset == "test_1m") &
+                       (intervals.comparison == model_name + " vs Model-1")].iloc[0]
+        rank_ok = all(
+            metrics[(metrics.dataset == dataset) & (metrics.model == model_name)].iloc[0].macro_spearman >=
+            metrics[(metrics.dataset == dataset) & (metrics.model == "Model-1")].iloc[0].macro_spearman - 0.02
+            for dataset in ("test_60m", "test_1B"))
+        decisions.append({"model": model_name, "q_transfer_validation_passed": bool(gate),
+                          "test_1m_rmse_improved": bool(same_scale.rmse < baseline.rmse),
+                          "test_1m_paired_ci_positive": bool(ci.bootstrap_ci_low > 0),
+                          "cross_scale_rank_not_materially_worse": bool(rank_ok),
+                          "stable_gain": bool(gate and ci.bootstrap_ci_low > 0 and rank_ok),
+                          "decision_scope": "A6-A11 only; A12-A15 are estimated subset diagnostics"})
+    _save(pd.DataFrame(decisions), out_dir / "gain_decision.csv")
     metadata = {"version": config["version"], "train_rows": len(train.p),
-                "validation_rows": {name: len(pair.p) for name, pair in external.items()},
-                "quality_mapped_domains": int(quality.q_observed.sum()),
-                "quality_neutral_imputed_domains": int(quality.q_imputed.sum()),
-                "q_source": "A1-A3 official 22-signal Q_primary domain means (A2 arxiv, A3 github)",
-                "a18_rows": int(text_frame.a18_rows.sum()),
-                "a18_all_valid_shards": bool(text_frame.all_valid_shards.all()),
-                "cv_fold_counts": np.bincount(folds).tolist(), "cv_near_duplicate_groups": int(len(np.unique(groups))),
-                "model_selection": "A4-A5 only; held-out and extrapolated targets never tune models",
-                "interpretation": "Fixed Q and A18 domain statistics are deterministic functions of p in feature space. Any gain is predictive regularization/geometry, not identified independent or causal quality impact.",
-                "cross_scale": "No absolute-loss scale calibration; cross-scale RMSE is descriptive.",
-                "extrapolation": "A12-A15 are estimated subset tables, not independent validation.",
-                "text_proxy": "Whitespace tokens; first cap tokens for lexical ratios; all characters for special ratio; A18 valid-shard sample, not training corpus."}
+                "a1_text_rows": len(features["a1_x"]), "a18_text_rows": len(features["a18_x"]),
+                "shared_features": features["accepted_fields"],
+                "signal_sample_per_domain": sample_per_domain,
+                "similarity_validation": sim_validation, "direct_q_validation": direct_validation,
+                "cv_fold_counts": np.bincount(folds).tolist(),
+                "cv_near_duplicate_groups": int(len(np.unique(groups))),
+                "quality_identification": "Fixed Q_i and p_i Q_i are functions of p; only predictive inductive-bias effects are tested.",
+                "data_roles": "A1 learns Q transfer; A16 validates similarity; A18 supplies valid-shard texts; A4+A5 select Loss models; A6-A11 validate; A12-A15 estimated subset only.",
+                "cross_scale": "No absolute-Loss scale calibration is applied."}
     (out_dir / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {"cv": best, "metrics": pd.DataFrame(metrics), "quality": quality,
-            "text": text_frame, "effects": effects, "metadata": metadata}
+    return {"cv": best, "metrics": metrics, "decisions": pd.DataFrame(decisions),
+            "mapping": sim, "lodo": lodo, "metadata": metadata}

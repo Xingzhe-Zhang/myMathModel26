@@ -4,8 +4,8 @@
 
 | 目录 | 内容 |
 |---|---|
-| `scripts/` | 三个正式运行入口：质量评分、维度对照、配比建模 |
-| `configs/` | 与三个入口对应的版本化配置 |
+| `scripts/` | 四个正式运行入口：质量评分、维度对照、配比建模、质量迁移对照 |
+| `configs/` | 与运行入口对应的版本化配置 |
 | `src/llm_resource/q1/` | 数据读取、预处理、评分、诊断、聚合与模型实现 |
 | `analysis/` | 复算评审和维度统计结论的辅助脚本及评审证据 |
 | `docs/` | 实验协议与标注格式说明 |
@@ -46,6 +46,18 @@ python Code/scripts/run_mixture.py `
 
 A4+A5 用于分组交叉验证与模型选择；A6–A11 用于外部检验；A12–A15 只用于外推一致性诊断。质量桥接使用 A16 的参考映射、A17 的域摘要和全量流式读取的 A18 原文；A17/A18 只产生覆盖与文本完整性证据，不会被误当成 22 信号质量评分。`quality_bridge_domain.csv`、`quality_bridge_recipe.csv` 和 `regmix_text_evidence.csv` 给出映射覆盖、来源核对与缺失域的质量情景界；质量桥接不进入主 Loss 模型。其他主要结果包括 `model_cv_summary.csv`、`external_metrics.csv`、`replacement_effects.csv`、`combination_effect_summary.csv` 和 `mixture_model.json`；解读见 [任务 3 结果报告](../Q1/报告/任务3配比与验证Loss.md)。
 
+## 任务 3：质量信息是否改善配比预测
+
+```powershell
+& 'Code/.venv/Scripts/python.exe' Code/scripts/run_quality_signal_reconstruction.py
+```
+
+运行前先按任务 1、2 命令生成 `sample_scores.csv`、`domain_summary.csv` 和 `fitted_scoring_model.json`。程序从 A1/A18 文本重算全部 11 个 RedPajama 统计量，调用固定版本的五个同族公开分类器，并以 CoLA 语法可接受度模型作为第六项 `fluency_en` 的候选代理。原万卷流畅度权重未公开；该代理只有在 A1 对照通过后才会用于质量迁移。A1 逐信号核验只保留通过预设门槛的字段。
+
+上面的入口**只重建并核验信号，不运行 Loss**；详细运行和结果文件说明见 [质量信号重建指南](docs/quality_signal_reconstruction.md)。待 A1 逐信号核验完成后，`run_quality_mixture_experiment.py` 才会继续：Model-2 用共同信号建立域画像，并在 A16 六条已知 direct/near_direct 映射上校验；Model-3 将可用字段按任务 1/2 的 22 字段格式解码，留一域时重新拟合任务 1/2 的预处理器与评分规则，最终应用到 A18 时使用冻结参数。不可复现的字段按原评分器的缺失值规则处理。**两条 Q 路线都通过跨域门槛，且显式提供 `--allow-loss-after-q-gate` 后**，才训练三组配比→Loss 模型。届时 A4+A5 分组交叉验证，A6–A11 检验，A12–A15 仅作外推诊断。固定域 Q 与 `p_iQ_i` 仍由配比决定，因此任何增益仅是预测先验效果。
+
+旧五特征结果见 [历史对照实验报告](../Q1/报告/任务3质量引入对照实验.md)，不代表上述新实验。
+
 ## 辅助复算与测试
 
 ```powershell
@@ -54,6 +66,6 @@ python Code/analysis/review_audit.py
 python -m unittest discover -s Code/tests -p "test_*.py" -v
 ```
 
-`review_audit.py` 会重写同目录的 `review_evidence.json`。两份审计脚本用于复核研究结论，正式结果由 `scripts/` 的三个入口生成。
+`review_audit.py` 会重写同目录的 `review_evidence.json`。两份审计脚本用于复核研究结论，正式结果由 `scripts/` 的四个入口生成。
 
 对 B 方案零权重的复评在正式维度对照完成后运行 `python Code/analysis/reassess_semantic.py`，结果写入 `Code/outputs/q1_dimension_reassessment/`；方法与结论见 [B 方案复评](../Q1/报告/B方案零权重合理性复评.md)。
