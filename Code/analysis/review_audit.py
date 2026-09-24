@@ -10,7 +10,7 @@ import json, lzma, hashlib, collections
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 A = ROOT / 'real_attachments/A_data_value'
 OUT = Path(__file__).with_name('review_evidence.json')
 result = {'scope': 'Attachment audits and exploratory train-only CV; no human quality labels, no LightGBM fit.'}

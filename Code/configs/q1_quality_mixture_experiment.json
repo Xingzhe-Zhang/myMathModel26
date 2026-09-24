@@ -1,0 +1,25 @@
+{
+  "version": "q1-quality-mixture-ablation-v1",
+  "seed": 20260924,
+  "train": {
+    "mixture": "train_mixture_1m.csv",
+    "loss": "train_pile_loss_1m.csv",
+    "folds": 5,
+    "group_l1_threshold": 0.01
+  },
+  "external_sets": {
+    "test_1m": {"mixture": "test_mixture_1m.csv", "loss": "test_pile_loss_1m.csv", "kind": "same_scale_validation"},
+    "test_60m": {"mixture": "test_mixture_60m.csv", "loss": "test_pile_loss_60m.csv", "kind": "cross_scale_validation"},
+    "test_1B": {"mixture": "test_mixture_1B.csv", "loss": "test_pile_loss_1B.csv", "kind": "cross_scale_validation"},
+    "est_10B": {"mixture": "est_mixture_10b.csv", "loss": "est_pile_loss_10b.csv", "kind": "extrapolated_subset"},
+    "est_70B": {"mixture": "est_mixture_70b.csv", "loss": "est_pile_loss_70b.csv", "kind": "extrapolated_subset"}
+  },
+  "grid": {
+    "gamma": [0.25, 1.0],
+    "lambda": [0.0001, 0.01],
+    "alpha": [0.5, 1.5],
+    "beta": [0.5, 1.5]
+  },
+  "a18_token_cap": 2048,
+  "effect_delta": 0.005
+}

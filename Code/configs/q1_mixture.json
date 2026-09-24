@@ -1,0 +1,46 @@
+{
+  "version": "q1-mixture-v2-a16-a18",
+  "seed": 20260924,
+  "train": {
+    "mixture": "train_mixture_1m.csv",
+    "loss": "train_pile_loss_1m.csv",
+    "folds": 5,
+    "group_l1_threshold": 0.01,
+    "selection_metric": "mean_13_output_mse"
+  },
+  "models": {
+    "families": ["linear_ridge", "quadratic_ridge", "rbf_kernel_ridge"],
+    "explanation_model": "quadratic_ridge",
+    "lambda_grid": [1e-8, 1e-6, 1e-4, 1e-2, 1e-1, 1.0],
+    "quadratic_interaction_penalty_grid": [1.0, 10.0, 100.0],
+    "rbf_gamma_grid": [0.25, 1.0, 4.0],
+    "rbf_bandwidth": "median_pairwise_squared_distance",
+    "standardize_inside_fold": true,
+    "intercept": "none_for_mixture_ridge; training_mean_baseline_for_kernel"
+  },
+  "aggregate": {
+    "loss_weights": "equal_13",
+    "recommendation_objective": "macro_mean_loss"
+  },
+  "effects": {
+    "transfer_delta": 0.05,
+    "bootstrap_repeats": 200,
+    "combination_pair_sample": 50000
+  },
+  "external_sets": {
+    "test_1m": {"mixture": "test_mixture_1m.csv", "loss": "test_pile_loss_1m.csv", "kind": "same_scale"},
+    "test_60m": {"mixture": "test_mixture_60m.csv", "loss": "test_pile_loss_60m.csv", "kind": "cross_scale"},
+    "test_1B": {"mixture": "test_mixture_1B.csv", "loss": "test_pile_loss_1B.csv", "kind": "cross_scale"},
+    "est_10B": {"mixture": "est_mixture_10b.csv", "loss": "est_pile_loss_10b.csv", "kind": "extrapolated_subset"},
+    "est_70B": {"mixture": "est_mixture_70b.csv", "loss": "est_pile_loss_70b.csv", "kind": "extrapolated_subset"}
+  },
+  "quality_bridge": {
+    "enabled": true,
+    "q1_summary": "Code/outputs/q1/domain_summary.csv",
+    "mapping": "real_attachments/A_data_value/domain_mapping_guide.csv",
+    "a17_summary": "real_attachments/A_data_value/regmix_domain_summary.csv",
+    "a18_sample": "real_attachments/A_data_value/regmix_domain_sample.jsonl.xz",
+    "unmapped_policy": "missing_primary_global_sensitivity",
+    "main_model_uses_quality": false
+  }
+}
