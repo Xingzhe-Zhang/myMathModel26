@@ -47,8 +47,20 @@ def infer_logits(texts: list[str], field: str, cache_dir: Path, *, batch_size: i
     except ImportError as exc:
         raise RuntimeError("Public model inference needs Code's optional `quality-models` dependencies: torch and transformers") from exc
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-    tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
-    model = AutoModelForSequenceClassification.from_pretrained(model_id, revision=revision).to(device).eval()
+    # Try the pinned local snapshot first. Transformers otherwise probes the Hub
+    # for a safetensors file even when a usable PyTorch checkpoint is cached.
+    # The CoLA proxy is distributed here as pytorch_model.bin, not safetensors.
+    model_options = {"use_safetensors": False} if field == "fluency_en" else {}
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision,
+                                                   local_files_only=True)
+        model = AutoModelForSequenceClassification.from_pretrained(
+            model_id, revision=revision, local_files_only=True, **model_options)
+    except OSError:
+        tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
+        model = AutoModelForSequenceClassification.from_pretrained(
+            model_id, revision=revision, **model_options)
+    model = model.to(device).eval()
     if model.config.num_labels != width:
         raise ValueError(f"{field}: expected {width} logits, got {model.config.num_labels}")
     chunks = []

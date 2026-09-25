@@ -67,6 +67,7 @@ def similarity_transfer(a1_x: np.ndarray, a1_domain: np.ndarray, a18_x: np.ndarr
         variants = []
         for omit in [None, *range(len(fields))]:
             d = distances if omit is None else np.sqrt(np.maximum(0, component[j].sum(axis=1) - component[j, :, omit]))
+            variant_order = np.argsort(d)
             for temperature in temperatures:
                 logits = -d / temperature
                 probabilities = np.exp(logits - logits.max())
@@ -76,7 +77,9 @@ def similarity_transfer(a1_x: np.ndarray, a1_domain: np.ndarray, a18_x: np.ndarr
                     main_p, main_q = probabilities, estimated
                 variants.append(estimated)
                 sensitivity.append({"domain": name, "omitted_field": "none" if omit is None else fields[omit],
-                                    "temperature": temperature, "q_estimate": estimated})
+                                    "temperature": temperature, "q_estimate": estimated,
+                                    "top1_quality_domain": source_domains[variant_order[0]],
+                                    "top1_probability": float(probabilities[variant_order[0]])})
         rows.append({"domain": name, "a18_rows": int(a18_profile.loc[j, "n"]),
                      "a16_mapping_type": entry.mapping_type,
                      "a16_quality_domain": entry.quality_domain if known else "(none)",

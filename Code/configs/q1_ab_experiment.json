@@ -1,0 +1,22 @@
+{
+  "version": "q1-ab-critic-v1",
+  "quality_config": "q1_quality.json",
+  "seed": 20260925,
+  "normalization_profiles": ["frozen_original", "dsir_reference_rank"],
+  "dsir_reference_rank_knots": 501,
+  "critic_shrinkage": 1.0,
+  "critic_shrinkage_sensitivity": [0.0, 0.25, 0.5, 0.75, 1.0],
+  "bootstrap_repeats": 100,
+  "selection_fraction_per_domain": 0.2,
+  "dsir_group": {
+    "members": ["dsir_books", "dsir_wiki", "dsir_math"],
+    "combination": "equal_target_prior_for_diagnostic_comparison",
+    "intrinsic_quality_status": "target_relevance_not_quality_ground_truth"
+  },
+  "qurater_group": {
+    "members": ["qurater_writing_style", "qurater_required_expertise", "qurater_facts_trivia", "qurater_educational_value"],
+    "B20_inner_weights": "domain_balanced_CRITIC_on_A1",
+    "sensitivity": "equal_four_way"
+  },
+  "interpretation": "A/B23/B20 are unlabeled candidates; no setting is validated as optimal training utility"
+}

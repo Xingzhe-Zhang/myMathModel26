@@ -99,17 +99,25 @@ def _audit(field: str, actual: np.ndarray, rebuilt: np.ndarray, *, model: bool) 
 
 def reconstruct(a1_path: Path, a18_path: Path, scores_path: Path, out: Path,
                 a1_domains: list[str], regmix_domains: list[str], *, per_domain: int,
-                batch_size: int, max_length: int, model_text_chars: int, device: str | None = None) -> dict:
-    """Sample both corpora, audit 11 rules + six model fields, join Q targets."""
+                batch_size: int, max_length: int, model_text_chars: int, device: str | None = None,
+                include_public_models: bool = True) -> dict:
+    """Sample both corpora and audit shared signals before transferring Q."""
     out.mkdir(parents=True, exist_ok=True)
-    (out / "model_registry.json").write_text(json.dumps({
-        "models": {field: {"repository": model, "revision": revision, "output_width": width,
-                            "identity": kind}
-                   for field, (model, revision, width, kind) in MODEL_REGISTRY.items()},
-        "max_length_tokens": max_length, "max_text_chars": model_text_chars,
-        "sample_per_domain": per_domain,
-        "caution": "fluency_en uses a CoLA proxy; A1 agreement is required before A18 application"
-    }, ensure_ascii=False, indent=2), encoding="utf-8")
+    if include_public_models:
+        (out / "model_registry.json").write_text(json.dumps({
+            "models": {field: {"repository": model, "revision": revision, "output_width": width,
+                                "identity": kind}
+                       for field, (model, revision, width, kind) in MODEL_REGISTRY.items()},
+            "max_length_tokens": max_length, "max_text_chars": model_text_chars,
+            "sample_per_domain": per_domain,
+            "caution": "fluency_en uses a CoLA proxy; A1 agreement is required before A18 application"
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+    else:
+        (out / "signal_mode.json").write_text(json.dumps({
+            "sample_per_domain": per_domain,
+            "public_model_inference": False,
+            "scope": "A1-audited RedPajama statistics only"
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
     a1_coverage: dict = {}
     a18_coverage: dict = {}
     a1 = _sample(a1_path, "content", per_domain, set(a1_domains), coverage=a1_coverage)
@@ -141,7 +149,8 @@ def reconstruct(a1_path: Path, a18_path: Path, scores_path: Path, out: Path,
     a1_texts = [r["content"][:model_text_chars] for r in a1]
     a18_texts = [r["text"][:model_text_chars] for r in a18]
     logits_by_field = {}
-    for field, (_, _, width, _) in MODEL_REGISTRY.items():
+    model_fields = MODEL_REGISTRY if include_public_models else {}
+    for field, (_, _, width, _) in model_fields.items():
         a1_logits = infer_logits(a1_texts, field, out / "model_cache",
                                  batch_size=batch_size, max_length=max_length, device=device)
         a1_pred[field] = _model_scalar(field, a1_logits)
@@ -159,7 +168,7 @@ def reconstruct(a1_path: Path, a18_path: Path, scores_path: Path, out: Path,
         np.savez_compressed(out / (field + "_logits.npz"), a1=a1_logits, a18=a18_logits)
     audit = pd.DataFrame(audit_rows)
     by_domain_rows = []
-    for field in SHARED_FIELDS:
+    for field in (*RPS_FIELDS, *model_fields):
         actual = _official_scalar(field, a1)
         for name in a1_domains:
             selected = a1_domain == name
@@ -167,13 +176,22 @@ def reconstruct(a1_path: Path, a18_path: Path, scores_path: Path, out: Path,
                                                                model=field in MODEL_REGISTRY)})
     pd.DataFrame(by_domain_rows).to_csv(out / "signal_a1_audit_by_domain.csv", index=False)
     accepted = [field for field in audit.loc[audit.passed, "field"]
-                if np.isfinite(a1_pred[field]).all() and np.isfinite(a18_pred[field]).all()]
+                if np.isfinite(a1_pred[field]).all() and np.isfinite(a18_pred[field]).any()]
     audit["accepted_for_transfer"] = audit.field.isin(accepted)
     audit.to_csv(out / "signal_a1_audit.csv", index=False)
     if len(accepted) < 3:
         raise ValueError("Fewer than three shared A1-validated signals; Q transfer is not identifiable")
     a1_x = np.column_stack([a1_pred[f] for f in accepted])
     a18_x = np.column_stack([a18_pred[f] for f in accepted])
+    missing_rows = []
+    for j, field in enumerate(accepted):
+        invalid = ~np.isfinite(a18_x[:, j])
+        missing_rows.append({"field": field, "a18_missing_count": int(invalid.sum()),
+                             "a18_missing_fraction": float(invalid.mean()),
+                             "profile_imputation": "A1 median"})
+        if invalid.any():
+            a18_x[invalid, j] = float(np.median(a1_x[:, j]))
+    pd.DataFrame(missing_rows).to_csv(out / "a18_feature_missingness.csv", index=False)
     # Reconstruct exactly the field shape expected by task1/2. Unvalidated and
     # non-reproducible fields remain NaN; frozen task1/2 medians handle them.
     a1_raw, a18_raw, a1_full_raw = [], [], []
@@ -181,7 +199,7 @@ def reconstruct(a1_path: Path, a18_path: Path, scores_path: Path, out: Path,
         rebuilt = []
         for i, record in enumerate(records):
             full_row = {field: rps[i][field] for field in RPS_FIELDS}
-            for field in MODEL_REGISTRY:
+            for field in model_fields:
                 full_row[field] = logits_by_field[field][domain][i].tolist()
             if domain == "a1":
                 a1_full_raw.append(decode_signals(full_row)[0])

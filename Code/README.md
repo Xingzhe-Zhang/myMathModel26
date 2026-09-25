@@ -1,10 +1,10 @@
 # 问题一代码与复现
 
-`Code/` 实现问题一的质量评分与冲突诊断、两套维度方案对照，以及 17 域配比对 13 项验证 Loss 的建模。从仓库根目录运行以下命令；所有脚本都能在未安装本地包的情况下找到 `src/`。
+`Code/` 实现问题一的质量评分与冲突诊断、A22/B23/B20 维度对照，以及 17 域配比对 13 项验证 Loss 的建模。从仓库根目录运行以下命令；所有脚本都能在未安装本地包的情况下找到 `src/`。
 
 | 目录 | 内容 |
 |---|---|
-| `scripts/` | 四个正式运行入口：质量评分、维度对照、配比建模、质量迁移对照 |
+| `scripts/` | 质量评分、A/B 维度实验、配比建模和质量迁移入口 |
 | `configs/` | 与运行入口对应的版本化配置 |
 | `src/llm_resource/q1/` | 数据读取、预处理、评分、诊断、聚合与模型实现 |
 | `analysis/` | 复算评审和维度统计结论的辅助脚本及评审证据 |
@@ -21,19 +21,21 @@ python Code/scripts/run_quality.py `
   --out Code/outputs/q1
 ```
 
-脚本在 A1 拟合并冻结效用尺度、缺失值处理和阈值，再处理 A1/A2/A3。默认的 `Q_primary` 等于 22 字段等权的 `Q_base`；有限补偿的 `Q_rule` 和惩罚强度情景也会输出，但在缺少独立标签时不充当主结果。主要结果包括 `sample_scores.csv`、`domain_summary.csv`、`conflict_pairs_*.csv`、`score_sensitivity_by_domain.csv` 和 `run_metadata.json`。快速检查可追加 `--bootstrap 10 --permutations 20`。
+脚本在 A1 拟合并冻结效用尺度、缺失值处理和阈值，再处理 A1/A2/A3。该入口保留原 22 字段等权基线，供既有任务 3 重建程序复用；新的非等权 A22 由下一节的 A/B 实验入口生成。有限补偿的 `Q_rule` 和惩罚强度情景也会输出，但在缺少独立标签时不充当主结果。主要结果包括 `sample_scores.csv`、`domain_summary.csv`、`conflict_pairs_*.csv`、`score_sensitivity_by_domain.csv` 和 `run_metadata.json`。快速检查可追加 `--bootstrap 10 --permutations 20`。
 
-## 两套质量维度方案
+## A22、B23、B20 维度实验
 
 ```powershell
-python Code/scripts/compare_dimensions.py `
+& 'Code/.venv/Scripts/python.exe' Code/scripts/run_ab_experiment.py `
   --data-root real_attachments `
   --quality-config Code/configs/q1_quality.json `
-  --dimension-config Code/configs/q1_dimension_schemes.json `
-  --out Code/outputs/q1_dimension_schemes
+  --config Code/configs/q1_ab_experiment.json `
+  --out Code/outputs/q1_ab_experiment
 ```
 
-这个入口并行输出 22 字段基线和语义分组候选方案，以及权重展开、结构诊断和盲审模板。方案含义、独立标注的输入格式与选择门槛见 [维度方案运行说明](docs/dimension_schemes.md)。在获得独立标签或受控训练反馈前，结构统计不能裁决哪套评分更接近真实质量。
+这个入口在同一 A1 冻结尺度下输出完整 CRITIC 加权 A22、QuRating 拆分且 DSIR 合并的 B23、QuRating 与 DSIR 双家族合并的 B20，并在 A1/A2/A3 上做排序、权重、归一化及收缩系数敏感性比较。各方案同时输出有限补偿候选分与共同原子信号冲突诊断。具体协议见 [维度实验说明](docs/ab_experiment.md)，结果解读见 [A/B 对照报告](../Q1/报告/任务12_A_B23_B20完整对照.md)。无独立标签或受控训练反馈时，不能裁决哪套更接近真实训练价值。
+
+保留的 22 维等权逐条记录可与三方案直接对照：`python Code/analysis/equal_baseline_comparison.py`。脚本核对 UID 和原评分一致性后生成 `Code/outputs/q1_ab_experiment/equal_baseline_comparison.csv`，不改写原记录。
 
 ## 任务 3：配比与验证 Loss
 
@@ -48,24 +50,33 @@ A4+A5 用于分组交叉验证与模型选择；A6–A11 用于外部检验；A1
 
 ## 任务 3：质量信息是否改善配比预测
 
+以下入口保留为**已完成的九项历史阶段**；它只使用通过 A1 复现校验的九个统计字段，不调用公开分类模型，其 Loss 数字不得当作十四项结果：
+
+```powershell
+& 'Code/.venv/Scripts/python.exe' Code/scripts/run_quality_mixture_9_stage.py
+```
+
+程序锁定 A16 六条老师给定的 direct/near_direct 映射，以 A1/A18 的九项共同信号域画像推断其余十一条，并输出 `completed_a16_mapping.csv`、第一/第二候选、相似度权重和删去单项信号的稳定性。A16 硬映射 Q 与 A18 相似度加权 Q 分别进入配方质量汇总和逐域质量耦合模型。另用任务 1/2 的冻结评分器对九项重建信号评分并做留一域检验；若该直接评分路线未通过门槛，不让它进入 Loss 对照。所有 Loss 模型仅在 A4+A5 内五折选参数，在 A6–A11 上检验；A12–A15 只作外推诊断。结果见 `Code/outputs/q1_quality_mixture_9_stage_complete_a16/` 和 [九项阶段报告](../Q1/报告/任务3九项质量引入三层实验.md)。
+
+可用 `--phase quality` 或 `--phase loss` 分阶段运行。固定抽样量敏感性实验加 `--sample-per-domain 128` 并指定独立 `--out`。当前固定域 (Q) 只是配比模型的质量先验，(pQ) 仍是 (p) 的确定函数。
+
+公开模型信号重建入口如下；**本机运行已完成**，A1 总体审计通过 9 项统计字段与 5 项公开模型字段。它只生成信号证据，不会自动更新九项 Loss 实验：
+
 ```powershell
 & 'Code/.venv/Scripts/python.exe' Code/scripts/run_quality_signal_reconstruction.py
 ```
 
 运行前先按任务 1、2 命令生成 `sample_scores.csv`、`domain_summary.csv` 和 `fitted_scoring_model.json`。程序从 A1/A18 文本重算全部 11 个 RedPajama 统计量，调用固定版本的五个同族公开分类器，并以 CoLA 语法可接受度模型作为第六项 `fluency_en` 的候选代理。原万卷流畅度权重未公开；该代理只有在 A1 对照通过后才会用于质量迁移。A1 逐信号核验只保留通过预设门槛的字段。
 
-上面的入口**只重建并核验信号，不运行 Loss**；详细运行和结果文件说明见 [质量信号重建指南](docs/quality_signal_reconstruction.md)。待 A1 逐信号核验完成后，`run_quality_mixture_experiment.py` 才会继续：Model-2 用共同信号建立域画像，并在 A16 六条已知 direct/near_direct 映射上校验；Model-3 将可用字段按任务 1/2 的 22 字段格式解码，留一域时重新拟合任务 1/2 的预处理器与评分规则，最终应用到 A18 时使用冻结参数。不可复现的字段按原评分器的缺失值规则处理。**两条 Q 路线都通过跨域门槛，且显式提供 `--allow-loss-after-q-gate` 后**，才训练三组配比→Loss 模型。届时 A4+A5 分组交叉验证，A6–A11 检验，A12–A15 仅作外推诊断。固定域 Q 与 `p_iQ_i` 仍由配比决定，因此任何增益仅是预测先验效果。
+公开模型入口**只重建并核验信号，不运行 Loss**；详细步骤与审计产物见 [质量信号重建指南](docs/quality_signal_reconstruction.md)。`Code/outputs/q1_quality_reconstruction_experiment/accepted_fields.json` 当前列出 14 项；`fluency_en` 代理与两项行级统计未过审计。十四项的 A16 六条固定/十一条软映射、任务 1/2 直接评分 LODO 及新的 A4–A15 Loss 对照**尚未实现和运行**；应在独立输出目录中完成，不覆盖九项产物。具体预注册分组、质量门禁和进度见 [十四项实验设计](../Q1/报告/任务3十四项质量桥接与配比实验设计.md)。既有 `run_quality_mixture_experiment.py` 是早期两条 Q 路线对照入口，不对应新版三层模型。
 
 旧五特征结果见 [历史对照实验报告](../Q1/报告/任务3质量引入对照实验.md)，不代表上述新实验。
 
 ## 辅助复算与测试
 
 ```powershell
-python Code/analysis/dimension_audit.py
 python Code/analysis/review_audit.py
 python -m unittest discover -s Code/tests -p "test_*.py" -v
 ```
 
-`review_audit.py` 会重写同目录的 `review_evidence.json`。两份审计脚本用于复核研究结论，正式结果由 `scripts/` 的四个入口生成。
-
-对 B 方案零权重的复评在正式维度对照完成后运行 `python Code/analysis/reassess_semantic.py`，结果写入 `Code/outputs/q1_dimension_reassessment/`；方法与结论见 [B 方案复评](../Q1/报告/B方案零权重合理性复评.md)。
+`review_audit.py` 会重写同目录的 `review_evidence.json`。A/B 实验的权重、效用审计和敏感性表由 `run_ab_experiment.py` 一次生成。
