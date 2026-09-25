@@ -1,6 +1,6 @@
 # A1/A18 质量信号重建：9 项统计 + 5 项公开模型通过总体审计
 
-> 运行状态（2026-09-25）：正式脚本已生成 A1/A18 信号矩阵与 17 项 A1 误差表，14 项通过、3 项未通过。该入口**没有**训练 A4–A15 Loss 模型；十四项质量迁移与 Loss 实验的完整协议见[任务 3 实验设计](../../Q1/报告/任务3十四项质量桥接与配比实验设计.md)。
+> 运行状态（2026-09-25）：正式脚本已生成 A1/A18 信号矩阵与 17 项 A1 误差表，14 项通过、3 项未通过。该入口**没有**训练 A4–A15 Loss 模型；质量迁移与 Loss 实验的完整协议见[任务 3 实验方案](../../Q1/报告/任务3_实验方案.md)。
 
 从仓库根目录在 PowerShell 执行：
 
@@ -24,4 +24,4 @@
 
 五个字段使用 FineWeb-Edu 与 Meta-rater 同族公开权重。`fluency_en` 的万卷原始权重暂未找到公开下载地址，脚本用 CoLA 语法可接受度分类器作为**候选代理**；若它与 A1 官方流畅度字段不一致，自动剔除，不会把它写成已复现的官方模型。该代理的固定版本在本机缓存为 `pytorch_model.bin`：加载时优先离线读取，避免网络故障下对不存在的 `model.safetensors` 发起探测；若本机没有完整缓存，仍需联网下载。11 个统计量全部重算，但只有通过 A1 误差门槛的字段才可用于 Q 迁移。
 
-若只是检查程序是否可运行，可加 `--per-domain 4 --out Code/outputs/q1_quality_reconstruction_pilot`。这个小样本只能排查运行问题，不能作为论文验证。正式运行生成的 `signal_a1_audit.csv`、`signal_a1_audit_by_domain.csv`、`accepted_fields.json`、`model_registry.json` 已位于 `Code/outputs/q1_quality_reconstruction_experiment/`。后续应先核验十四项 A16 软映射和任务 1/2 冻结评分器的跨域表现；**总体字段通过不等于 Q 跨域通过**。当前九项阶段已有的 Model-2/3 Loss 结果不自动升级为十四项结果。
+若只是检查程序是否可运行，可加 `--per-domain 4 --out Code/outputs/q1_quality_reconstruction_pilot`。这个小样本只能排查运行问题，不能作为论文验证。正式运行生成的 `signal_a1_audit.csv`、`signal_a1_audit_by_domain.csv`、`accepted_fields.json`、`model_registry.json` 已位于 `Code/outputs/q1_quality_reconstruction_experiment/`。**总体字段通过不等于 Q 跨域通过**；A16 软映射、任务 1/2 冻结评分器的跨域门禁及 Loss 对照已在[任务 3 实验结果](../../Q1/报告/任务3_实验结果.md)中另行检验。
