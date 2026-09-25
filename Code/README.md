@@ -68,7 +68,17 @@ A4+A5 用于分组交叉验证与模型选择；A6–A11 用于外部检验；A1
 
 运行前先按任务 1、2 命令生成 `sample_scores.csv`、`domain_summary.csv` 和 `fitted_scoring_model.json`。程序从 A1/A18 文本重算全部 11 个 RedPajama 统计量，调用固定版本的五个同族公开分类器，并以 CoLA 语法可接受度模型作为第六项 `fluency_en` 的候选代理。原万卷流畅度权重未公开；该代理只有在 A1 对照通过后才会用于质量迁移。A1 逐信号核验只保留通过预设门槛的字段。
 
-公开模型入口**只重建并核验信号，不运行 Loss**；详细步骤与审计产物见 [质量信号重建指南](docs/quality_signal_reconstruction.md)。`Code/outputs/q1_quality_reconstruction_experiment/accepted_fields.json` 当前列出 14 项；`fluency_en` 代理与两项行级统计未过审计。十四项的 A16 六条固定/十一条软映射、任务 1/2 直接评分 LODO 及新的 A4–A15 Loss 对照**尚未实现和运行**；应在独立输出目录中完成，不覆盖九项产物。具体预注册分组、质量门禁和进度见 [十四项实验设计](../Q1/报告/任务3十四项质量桥接与配比实验设计.md)。既有 `run_quality_mixture_experiment.py` 是早期两条 Q 路线对照入口，不对应新版三层模型。
+公开模型入口**只重建并核验信号，不运行 Loss**；详细步骤与审计产物见 [质量信号重建指南](docs/quality_signal_reconstruction.md)。`Code/outputs/q1_quality_reconstruction_experiment/accepted_fields.json` 列出 14 项；`fluency_en` 代理与两项行级统计未过审计。十四项完整质量桥接与 Loss 对照现由下一入口独立执行，不覆盖九项产物。既有 `run_quality_mixture_experiment.py` 是早期两条 Q 路线对照入口，不对应新版三层模型。
+
+### 十四项完整实验
+
+```powershell
+& 'Code/.venv/Scripts/python.exe' Code/scripts/run_quality_mixture_14_stage.py --phase all
+```
+
+此入口先按冻结的 B20 原尺度基础分构建十四项画像桥接和直接评分，输出 A16 锚点、A1 留一域质量门禁；仅过关路线进入 A4+A5 五折选模及 A6–A11 实际 Loss 检验。A12–A15 只作估算外推诊断。结果在 `Code/outputs/q1_quality_mixture_14_stage/`，详见 [十四项完整实验报告](../Q1/报告/任务3十四项质量桥接与配比完整实验报告.md) 和 [实验前设计](../Q1/报告/任务3十四项质量桥接与配比实验设计.md)。`--phase quality`、`--phase loss` 可分阶段复算；程序不修改信号重建入口。
+
+旧的配方筛选诊断脚本 `Code/analysis/q1_task3_quality_diagnostic.py` 及对应报告仍保留作题外附录，不是问题一任务 3 的模型判定依据。十四项正式结果以 13 个验证域 Loss 的预测检验与领域/组合分析为准。
 
 旧五特征结果见 [历史对照实验报告](../Q1/报告/任务3质量引入对照实验.md)，不代表上述新实验。
 

@@ -1,0 +1,49 @@
+{
+  "version": "q1-task3-fourteen-signal-b20-v1",
+  "seed": 20260925,
+  "quality_source": {
+    "scheme": "B20_hierarchical",
+    "profile": "frozen_original",
+    "score": "Q_base",
+    "reference_source": "union",
+    "sensitivity_schemes": ["A22", "B23_flat"],
+    "sensitivity_profiles": ["dsir_reference_rank"],
+    "sensitivity_sources": ["A1"]
+  },
+  "accepted_fields_required": [
+    "rps_doc_word_count", "rps_doc_num_sentences", "rps_doc_unigram_entropy",
+    "rps_doc_frac_unique_words", "rps_doc_frac_no_alph_words",
+    "rps_doc_frac_chars_top_2gram", "rps_doc_frac_chars_top_3gram",
+    "rps_lines_numerical_chars_fraction", "rps_doc_mean_word_length",
+    "fineweb_edu", "modernbert_cleanliness", "modernbert_readability",
+    "modernbert_reasoning", "modernbert_professionalism"
+  ],
+  "distance_families": {
+    "length": ["rps_doc_word_count", "rps_doc_num_sentences", "rps_doc_mean_word_length"],
+    "lexical": ["rps_doc_unigram_entropy", "rps_doc_frac_unique_words"],
+    "surface_repetition": ["rps_doc_frac_no_alph_words", "rps_doc_frac_chars_top_2gram", "rps_doc_frac_chars_top_3gram", "rps_lines_numerical_chars_fraction"],
+    "fineweb": ["fineweb_edu"],
+    "modernbert": ["modernbert_cleanliness", "modernbert_readability", "modernbert_reasoning", "modernbert_professionalism"]
+  },
+  "length_log1p_fields": ["rps_doc_word_count", "rps_doc_num_sentences", "rps_doc_mean_word_length"],
+  "temperature_main": 1.0,
+  "temperature_sensitivity": [0.5, 2.0],
+  "bootstrap_repeats": 300,
+  "a16_gate": {"min_top1_of_6": 5, "min_top3_of_6": 6, "min_near_top1_of_3": 2, "q_mae_below_constant": true},
+  "direct_gate": {"rmse_below_constant": true, "domain_mae_fraction_of_constant": 0.8, "max_domain_mean_abs_error": 0.08},
+  "train": {"mixture": "train_mixture_1m.csv", "loss": "train_pile_loss_1m.csv", "folds": 5, "group_l1_threshold": 0.01},
+  "external_sets": {
+    "test_1m": {"mixture": "test_mixture_1m.csv", "loss": "test_pile_loss_1m.csv", "kind": "validation"},
+    "test_60m": {"mixture": "test_mixture_60m.csv", "loss": "test_pile_loss_60m.csv", "kind": "validation"},
+    "test_1B": {"mixture": "test_mixture_1B.csv", "loss": "test_pile_loss_1B.csv", "kind": "validation"},
+    "est_10B": {"mixture": "est_mixture_10b.csv", "loss": "est_pile_loss_10b.csv", "kind": "extrapolated_subset"},
+    "est_70B": {"mixture": "est_mixture_70b.csv", "loss": "est_pile_loss_70b.csv", "kind": "extrapolated_subset"}
+  },
+  "loss_grid": {
+    "gamma": [0.25, 1.0], "lambda": [0.0001, 0.01],
+    "alpha": [0.0, 0.5, 1.5],
+    "ridge_lambda": [0.0001, 0.01],
+    "interaction_penalty": [10.0, 100.0],
+    "prior_strength": [0.0, 0.000001, 0.0001, 0.01]
+  }
+}
